@@ -8,22 +8,23 @@
 #include "nrarith.h"
 #include "nralloc.h"
 
-#define SEUIL 5
-#define SEUIL_C -20
+#define SEUIL_C 50
 #define BLANC 255
 #define NOIR 0
 #define IMAGE_GREYSCALE 0
 #define IMAGE_RGB 1
-#define LAMBDA 0.1
+#define LAMBDA 0.2
 
 const int reponse_impulsionnelle[3][3] = {{1,1,1}, {1,1,1}, {1,1,1}};
 const int Sobel_horizontal[3][3] = {{-1,0,1} , {-2,0,2}, {-1,0,1}}; //Gradient horizontal Y
 const int Sobel_vertical[3][3] = {{-1,-2,-1} , {0,0,0}, {1,2,1}}; //Gradient vertical X
-const int filtre_gaussien[3][3] = {{0.2,0.3,0.2} , {0.3,1,0.3}, {0.2,0.3,0.2}};
+const int filtre_gaussien[3][3] = {{0.3,0.5,0.3} , {0.5,1,0.5}, {0.3,0.5,0.3}};
 
 void ApplicationFiltres(byte **I, byte** Ix, byte** Iy, int i, int j);
 long detectionHarris(byte **Ix, byte** Iy, int i, int j);
 void convert_rbg_to_greyscale(rgb8** image_rgb,byte** image_ndg,long nrl, long nrh, long ncl, long nch, double tauxRGB[3]);
+byte convolution(byte **Ix, byte **Iy);
+
 
 int main(int argc, char** argv)
 {
@@ -35,7 +36,7 @@ int main(int argc, char** argv)
     long C;
     long nrh,nrl,nch,ncl;
 
-    image_ndg=LoadPGM_bmatrix("cubes.pgm",&nrl,&nrh,&ncl,&nch);
+    image_ndg=LoadPGM_bmatrix("rice.pgm",&nrl,&nrh,&ncl,&nch);
 
     Ix=bmatrix(nrl,nrh,ncl,nch);
     Iy=bmatrix(nrl,nrh,ncl,nch);
@@ -48,18 +49,17 @@ int main(int argc, char** argv)
         {
             ApplicationFiltres(image_ndg,Ix,Iy,i,j);
             C = detectionHarris(Ix,Iy, i, j);
-            // if(C != 0)
-            //     printf("x : %d y : %d | C : %d\n", i,j,C);
+            if(C != 0)
+                printf("x : %d y : %d | C : %d\n", i,j,C);
 
-            if(C > SEUIL_C && C != 0)
+            if(abs(C) > SEUIL_C)
                 In[i][j] = BLANC;
             else
                 In[i][j] = NOIR;
         }
     }
 
-
-    SavePGM_bmatrix(In,nrl,nrh,ncl,nch,"res.pgm");
+    SavePGM_bmatrix(In,nrl,nrh,ncl,nch,"res_rice.pgm");
 
     free_bmatrix(image_ndg,nrl,nrh,ncl,nch);
     free_bmatrix(Ix,nrl,nrh,ncl,nch);
@@ -100,8 +100,14 @@ long detectionHarris(byte **Ix, byte** Iy, int i, int j)
             + filtre_gaussien[1][0] * (Ix[i][j - 1] * Iy[i][j - 1]) + filtre_gaussien[1][1] * (Ix[i][j] * Iy[i][j]) + filtre_gaussien[1][2] * (Ix[i][j + 1] * Iy[i][j + 1])
             + filtre_gaussien[2][0] * (Ix[i + 1][j - 1] * Iy[i + 1][j - 1]) + filtre_gaussien[2][1] * (Ix[i + 1][j] * Iy[i + 1][j]) + filtre_gaussien[2][2] * (Ix[i + 1][j + 1] * Iy[i + 1][j + 1])) / 9);
 
+    return (Ixtmp * Iytmp- Ixytmp) - (LAMBDA * pow((Ixtmp + Iytmp),2)) ;
+}
 
-    return (Ixtmp * Iytmp) - Ixytmp - (LAMBDA * pow((Ixtmp + Iytmp),2)) ;
+byte convolution(byte **Ix, byte **Iy)
+{
+    return floor(Ix[i - 1][j - 1] * Iy[i - 1][j - 1] +  Ix[i - 1][j] * Iy[i - 1][j] + Ix[i - 1][j + 1] * Iy[i - 1][j + 1]
+            + Ix[i][j - 1] * Iy[i][j - 1] + Ix[i][j] * Iy[i][j] + Ix[i][j + 1] * Iy[i][j + 1]
+            + Ix[i + 1][j - 1] * Iy[i + 1][j - 1] + Ix[i + 1][j] * Iy[i + 1][j] + Ix[i + 1][j + 1] * Iy[i + 1][j + 1]) / 9);
 }
 
     // <Ix^2> <Iy^2> - <IxIy> - lambda (<Ix^2> + <Iy^2>)^2
