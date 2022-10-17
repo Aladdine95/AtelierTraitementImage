@@ -8,7 +8,7 @@
 #include "nrarith.h"
 #include "nralloc.h"
 
-#define SEUIL 4
+#define SEUIL 8
 #define BLANC 255
 #define NOIR 0
 #define IMAGE_GREYSCALE 0
