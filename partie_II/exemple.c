@@ -8,12 +8,18 @@
 #include "nrarith.h"
 #include "nralloc.h"
 
+/****************************/
+/*      CONSTANTS           */
+/****************************/
+
 #define SEUIL_C 50
 #define BLANC 255
 #define NOIR 0
 #define IMAGE_GREYSCALE 0
 #define IMAGE_RGB 1
 #define LAMBDA 0.2
+#define USING_HARRIS 0
+
 
 const int reponse_impulsionnelle[3][3] = {{1,1,1}, {1,1,1}, {1,1,1}};
 const int lower_mask[3][3] = {{0.1, 0.1, 0.1}, {0.1, 0.1, 0.1}, {0.1, 0.1, 0.1}};
@@ -21,59 +27,88 @@ const int Sobel_horizontal[3][3] = {{-1,0,1} , {-2,0,2}, {-1,0,1}}; //Gradient h
 const int Sobel_vertical[3][3] = {{-1,-2,-1} , {0,0,0}, {1,2,1}}; //Gradient vertical X
 const int filtre_gaussien[3][3] = {{0.3,0.5,0.3} , {0.5,1,0.5}, {0.3,0.5,0.3}};
 const int gradient_mask_detector[3][3] = {{1, 1, 1}, {1, 0, 1}, {1, 1, 1}};
+
+/****************************/
+/*         STRUCTS          */
+/****************************/
 typedef struct Vector{
     int vx;
     int vy;
 }Vector;
+
+/****************************/
+/*       PROTOTYPES         */
+/****************************/
 
 void ApplicationFiltres(byte **I, byte** Ix, byte** Iy, int i, int j);
 long detectionHarris(byte **Ix, byte** Iy, int i, int j);
 void convert_rbg_to_greyscale(rgb8** image_rgb,byte** image_ndg,long nrl, long nrh, long ncl, long nch, double tauxRGB[3]);
 byte convolutionGradientMask(byte **I, int i, int j);
 long gradient_detector(byte **Ix, byte **Iy, int i, int j);
+void listePointsInteret(byte** image, byte** Ix, byte** Iy, byte **In, int* cptWhite, long nrl,long nrh,long ncl,long nch, int isHarris);
+void vectorDisplacementEstimation(byte** In1, byte** In2, Vector* vectors, long nrl, long nrh, long ncl, long nch);
 
 int main(int argc, char** argv)
 {
     printf("Debut");
     byte **image_ndg; // Image en niveaux de gris
+    byte **image_ndg2;
     byte **Ix;
 	byte **Iy;
     byte **In;
+    byte **In2;
 
     long C;
     long nrh,nrl,nch,ncl;
 
     image_ndg=LoadPGM_bmatrix("rice.pgm",&nrl,&nrh,&ncl,&nch);
+    image_ndg2=LoadPGM_bmatrix("rice2.pgm",&nrl,&nrh,&ncl,&nch);
+
+    int cptWhiteIn;
+    int cptWhiteIn2;
+
+    cptWhiteIn = 0;
+    cptWhiteIn2 = 0;
 
     Ix=bmatrix(nrl,nrh,ncl,nch);
     Iy=bmatrix(nrl,nrh,ncl,nch);
     In=bmatrix(nrl,nrh,ncl,nch);
+    In2=bmatrix(nrl, nrh, ncl, nch);
 
-    for (int i = nrl + 1; i < nrh - 1; i++) 
-    {
-        for (int j = ncl + 1; j < nch - 1; j++) 
+    listePointsInteret(image_ndg, Ix, Iy, In, &cptWhiteIn, nrl, nrh, ncl, nch, USING_HARRIS);
+    listePointsInteret(image_ndg2, Ix, Iy, In2, &cptWhiteIn2, nrl, nrh, ncl, nch, USING_HARRIS);
+
+    int cptWhite;
+    printf("cptWhiteIn : %d", cptWhiteIn);
+    printf("cptWhiteIn2 : %d", cptWhiteIn2);
+    if(cptWhiteIn <= cptWhiteIn2){
+        cptWhite = cptWhiteIn2;
+    }
+    else{
+        cptWhite = cptWhiteIn;
+    }
+
+    printf("cptWhite is : %d\n", cptWhite);
+
+    Vector* vectors = malloc(cptWhite*sizeof(Vector));
+
+    vectorDisplacementEstimation(In, In2, vectors, nrl, nrh, ncl, nch);
+    
+    for(int index = 0; index < cptWhite; index++){
+        if(vectors[index].vx != 0 && vectors[index].vy != 0)
         {
-            ApplicationFiltres(image_ndg, Ix, Iy, i, j);
-            C = gradient_detector(Ix, Iy, i, j);
-            //C = detectionHarris(Ix,Iy, i, j);
-            if(C != 0)
-                printf("x : %d y : %d | C : %ld\n", i,j,C);
-
-            if(abs(C) > SEUIL_C)
-                In[i][j] = BLANC;
-            else
-                In[i][j] = NOIR;
-
-            
+            printf("Vector n°%d | vx = %d ; vy = %d\n", index, vectors[index].vx, vectors[index].vy);
         }
     }
 
     SavePGM_bmatrix(In,nrl,nrh,ncl,nch,"res_rice.pgm");
 
     free_bmatrix(image_ndg,nrl,nrh,ncl,nch);
+    free_bmatrix(image_ndg2,nrl,nrh,ncl,nch);
     free_bmatrix(Ix,nrl,nrh,ncl,nch);
     free_bmatrix(Iy,nrl,nrh,ncl,nch);    
     free_bmatrix(In,nrl,nrh,ncl,nch);
+    free_bmatrix(In2,nrl,nrh,ncl,nch);
 
     return 0;
 }
@@ -132,13 +167,83 @@ long gradient_detector(byte **Ix, byte **Iy, int i, int j){
             + (Ix[i + 1][j - 1] * Iy[i + 1][j - 1]) + (Ix[i + 1][j] * Iy[i + 1][j]) + (Ix[i + 1][j + 1] * Iy[i + 1][j + 1])) / 9);
     IxIyConvolued = floor((IxConvolued * IyConvolued));
 
-    printf("\t IyConvolued: %ld\n", IxConvolued);
+    /*printf("\t IyConvolued: %ld\n", IxConvolued);
     printf("\t IxConvolued: %ld\n", IyConvolued);
     printf("\t IxIy: %ld\n", IxIy);
-    printf("\t IxIyConvolued: %ld\n", IxIyConvolued);
+    printf("\t IxIyConvolued: %ld\n", IxIyConvolued);*/
 
     long result = ((pow(Ix[i][j], 2) * pow(IyConvolued, 2)) + (pow(Iy[i][j], 2) * pow(IxConvolued, 2)) - ((2*IxIy) * IxIyConvolued)) / (pow(IxConvolued, 2) + pow(IyConvolued, 2));
     return result;
 } 
 
-// <Ix^2> <Iy^2> - <IxIy> - lambda (<Ix^2> + <Iy^2>)^2
+void listePointsInteret(byte** image,byte** Ix,byte** Iy, byte **In, int* cptWhite, long nrl,long nrh,long ncl,long nch, int isHarris){
+
+    In=bmatrix(nrl,nrh,ncl,nch);
+    int C;
+    for (int i = nrl + 1; i < nrh - 1; i++) 
+    {
+        for (int j = ncl + 1; j < nch - 1; j++) 
+        {
+            ApplicationFiltres(image,Ix,Iy,i,j);
+            if(isHarris){
+                C = detectionHarris(Ix,Iy,i,j);
+            }
+            else{
+                C = gradient_detector(Ix, Iy, i, j);
+            }
+            if(C != 0)
+                printf("x : %d y : %d | C : %d\n", i,j,C);
+            
+            if(abs(C) > SEUIL_C){
+                In[i][j] = BLANC;
+                *cptWhite = *cptWhite + 1;
+            }
+            else
+                In[i][j] = NOIR;
+        }
+    }
+}
+
+void vectorDisplacementEstimation(byte** In1, byte** In2, Vector* vectors, long nrl, long nrh, long ncl, long nch){
+    int iteration = 0;
+    for (int i = nrl + 1; i < nrh - 1; i++) 
+    {
+        for (int j = ncl + 1; j < nch - 1; j++) 
+        {
+            int condWhite = (In1[i][j] == BLANC);
+            if(condWhite){
+                if((In1[i][j] == In2[i][j])){
+                    Vector vect;
+                    vect.vx = 0;
+                    vect.vy = 0;
+                    vectors[iteration] = vect;
+                    iteration++; 
+                }
+                else{
+                    int found = 0;
+                    int iterLoop = 1;
+                    while(found != 1){
+                        for(int k = i; k < iterLoop; k++){
+                            for(int l = j; l < iterLoop; l++){
+                                int abscissa = k;
+                                int ordinate = l;
+                                if((abscissa <= nrl + 1 && abscissa >= nrh - 1) && (ordinate <= nch - 1 && ordinate >= ncl + 1)){
+                                    if(In2[k][l] == BLANC){
+                                        Vector vect;
+                                        vect.vx = k;
+                                        vect.vy = l;
+                                        vectors[iteration] = vect;
+                                        iteration++;
+                                        found = 1;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        iterLoop++;
+                    }
+                }                    
+            }
+        }
+    }
+}
