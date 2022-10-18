@@ -16,18 +16,25 @@
 #define LAMBDA 0.2
 
 const int reponse_impulsionnelle[3][3] = {{1,1,1}, {1,1,1}, {1,1,1}};
+const int lower_mask[3][3] = {{0.1, 0.1, 0.1}, {0.1, 0.1, 0.1}, {0.1, 0.1, 0.1}};
 const int Sobel_horizontal[3][3] = {{-1,0,1} , {-2,0,2}, {-1,0,1}}; //Gradient horizontal Y
 const int Sobel_vertical[3][3] = {{-1,-2,-1} , {0,0,0}, {1,2,1}}; //Gradient vertical X
 const int filtre_gaussien[3][3] = {{0.3,0.5,0.3} , {0.5,1,0.5}, {0.3,0.5,0.3}};
+const int gradient_mask_detector[3][3] = {{1, 1, 1}, {1, 0, 1}, {1, 1, 1}};
+typedef struct Vector{
+    int vx;
+    int vy;
+}Vector;
 
 void ApplicationFiltres(byte **I, byte** Ix, byte** Iy, int i, int j);
 long detectionHarris(byte **Ix, byte** Iy, int i, int j);
 void convert_rbg_to_greyscale(rgb8** image_rgb,byte** image_ndg,long nrl, long nrh, long ncl, long nch, double tauxRGB[3]);
-byte convolution(byte **Ix, byte **Iy);
-
+byte convolutionGradientMask(byte **I, int i, int j);
+long gradient_detector(byte **Ix, byte **Iy, int i, int j);
 
 int main(int argc, char** argv)
 {
+    printf("Debut");
     byte **image_ndg; // Image en niveaux de gris
     byte **Ix;
 	byte **Iy;
@@ -42,20 +49,22 @@ int main(int argc, char** argv)
     Iy=bmatrix(nrl,nrh,ncl,nch);
     In=bmatrix(nrl,nrh,ncl,nch);
 
-
     for (int i = nrl + 1; i < nrh - 1; i++) 
     {
         for (int j = ncl + 1; j < nch - 1; j++) 
         {
-            ApplicationFiltres(image_ndg,Ix,Iy,i,j);
-            C = detectionHarris(Ix,Iy, i, j);
+            ApplicationFiltres(image_ndg, Ix, Iy, i, j);
+            C = gradient_detector(Ix, Iy, i, j);
+            //C = detectionHarris(Ix,Iy, i, j);
             if(C != 0)
-                printf("x : %d y : %d | C : %d\n", i,j,C);
+                printf("x : %d y : %d | C : %ld\n", i,j,C);
 
             if(abs(C) > SEUIL_C)
                 In[i][j] = BLANC;
             else
                 In[i][j] = NOIR;
+
+            
         }
     }
 
@@ -99,15 +108,37 @@ long detectionHarris(byte **Ix, byte** Iy, int i, int j)
     Ixytmp = floor((filtre_gaussien[0][0] * (Ix[i - 1][j - 1]*Iy[i - 1][j - 1]) + filtre_gaussien[0][1] * (Ix[i - 1][j] * Iy[i - 1][j]) + filtre_gaussien[0][2] * (Ix[i - 1][j + 1] * Iy[i - 1][j + 1])
             + filtre_gaussien[1][0] * (Ix[i][j - 1] * Iy[i][j - 1]) + filtre_gaussien[1][1] * (Ix[i][j] * Iy[i][j]) + filtre_gaussien[1][2] * (Ix[i][j + 1] * Iy[i][j + 1])
             + filtre_gaussien[2][0] * (Ix[i + 1][j - 1] * Iy[i + 1][j - 1]) + filtre_gaussien[2][1] * (Ix[i + 1][j] * Iy[i + 1][j]) + filtre_gaussien[2][2] * (Ix[i + 1][j + 1] * Iy[i + 1][j + 1])) / 9);
-
+    
     return (Ixtmp * Iytmp- Ixytmp) - (LAMBDA * pow((Ixtmp + Iytmp),2)) ;
 }
 
-byte convolution(byte **Ix, byte **Iy)
+byte convolutionGradientMask(byte **I, int i, int j)
 {
-    return floor(Ix[i - 1][j - 1] * Iy[i - 1][j - 1] +  Ix[i - 1][j] * Iy[i - 1][j] + Ix[i - 1][j + 1] * Iy[i - 1][j + 1]
-            + Ix[i][j - 1] * Iy[i][j - 1] + Ix[i][j] * Iy[i][j] + Ix[i][j + 1] * Iy[i][j + 1]
-            + Ix[i + 1][j - 1] * Iy[i + 1][j - 1] + Ix[i + 1][j] * Iy[i + 1][j] + Ix[i + 1][j + 1] * Iy[i + 1][j + 1]) / 9);
+    return floor((gradient_mask_detector[0][0] * I[i - 1][j - 1] + gradient_mask_detector[0][1] * I[i - 1][j] + gradient_mask_detector[0][2] * I[i - 1][j + 1]
+            + gradient_mask_detector[1][0] * I[i][j - 1] + gradient_mask_detector[1][1] * I[i][j] + gradient_mask_detector[1][2] * I[i][j + 1]
+            + gradient_mask_detector[2][0] * I[i + 1][j - 1] + gradient_mask_detector[2][1] * I[i + 1][j] + gradient_mask_detector[2][2] * I[i + 1][j + 1]) / 9);
 }
 
-    // <Ix^2> <Iy^2> - <IxIy> - lambda (<Ix^2> + <Iy^2>)^2
+long gradient_detector(byte **Ix, byte **Iy, int i, int j){
+    long IxConvolued;
+    long IyConvolued;
+    long IxIy;
+    long IxIyConvolued;
+    
+    IxConvolued = convolutionGradientMask(Ix, i, j);
+    IyConvolued = convolutionGradientMask(Iy, i, j);
+    IxIy = floor(((Ix[i - 1][j - 1]*Iy[i - 1][j - 1]) + (Ix[i - 1][j] * Iy[i - 1][j]) + (Ix[i - 1][j + 1] * Iy[i - 1][j + 1])
+            + (Ix[i][j - 1] * Iy[i][j - 1]) + (Ix[i][j] * Iy[i][j]) + (Ix[i][j + 1] * Iy[i][j + 1])
+            + (Ix[i + 1][j - 1] * Iy[i + 1][j - 1]) + (Ix[i + 1][j] * Iy[i + 1][j]) + (Ix[i + 1][j + 1] * Iy[i + 1][j + 1])) / 9);
+    IxIyConvolued = floor((IxConvolued * IyConvolued));
+
+    printf("\t IyConvolued: %ld\n", IxConvolued);
+    printf("\t IxConvolued: %ld\n", IyConvolued);
+    printf("\t IxIy: %ld\n", IxIy);
+    printf("\t IxIyConvolued: %ld\n", IxIyConvolued);
+
+    long result = ((pow(Ix[i][j], 2) * pow(IyConvolued, 2)) + (pow(Iy[i][j], 2) * pow(IxConvolued, 2)) - ((2*IxIy) * IxIyConvolued)) / (pow(IxConvolued, 2) + pow(IyConvolued, 2));
+    return result;
+} 
+
+// <Ix^2> <Iy^2> - <IxIy> - lambda (<Ix^2> + <Iy^2>)^2
