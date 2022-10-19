@@ -21,11 +21,11 @@
 #define USING_HARRIS 1
 
 
-const int reponse_impulsionnelle[3][3] = {{1,1,1}, {1,1,1}, {1,1,1}};
+const int impulsionnal_response[3][3] = {{1,1,1}, {1,1,1}, {1,1,1}};
 const int lower_mask[3][3] = {{0.1, 0.1, 0.1}, {0.1, 0.1, 0.1}, {0.1, 0.1, 0.1}};
 const int Sobel_horizontal[3][3] = {{-1,0,1} , {-2,0,2}, {-1,0,1}}; //Gradient horizontal Y
 const int Sobel_vertical[3][3] = {{-1,-2,-1} , {0,0,0}, {1,2,1}}; //Gradient vertical X
-const int filtre_gaussien[3][3] = {
+const int gaussian_filter[3][3] = {
     {0.2,0.1,0.2}, 
     {0.7,1,0.7}, 
     {0.5,0.1,0.5}
@@ -36,12 +36,12 @@ const int gradient_mask_detector[3][3] = {{1, 1, 1}, {1, 0, 1}, {1, 1, 1}};
 /*       PROTOTYPES         */
 /****************************/
 
-void ApplicationFiltres(byte **I, byte** Ix, byte** Iy, int i, int j);
-long detectionHarris(byte **Ix, byte** Iy, int i, int j);
+void sobelFilterApplication(byte **I, byte** Ix, byte** Iy, int i, int j);
+long harrisDetection(byte **Ix, byte** Iy, int i, int j);
 void convert_rbg_to_greyscale(rgb8** image_rgb,byte** image_ndg,long nrl, long nrh, long ncl, long nch, double tauxRGB[3]);
 byte convolutionGradientMask(byte **I, int i, int j);
 long gradient_detector(byte **Ix, byte **Iy, int i, int j);
-void listePointsInteret(byte** image, byte** Ix, byte** Iy, byte **In, int* cptWhite, long nrl,long nrh,long ncl,long nch, int isHarris);
+void listInterestPoints(byte** image, byte** Ix, byte** Iy, byte **In, int* cptWhite, long nrl,long nrh,long ncl,long nch, int isHarris);
 void vectorDisplacementEstimation(byte** In1, byte** In2, int** accumulationMat, int shift, long nrl, long nrh, long ncl, long nch);
 void electedValueAccumulation(int** accumulationMat, int accuSize, int* vx, int* vy);
 
@@ -71,8 +71,8 @@ int main(int argc, char** argv)
     In=bmatrix(nrl,nrh,ncl,nch);
     In2=bmatrix(nrl, nrh, ncl, nch);
 
-    listePointsInteret(image_ndg, Ix, Iy, In, &cptWhiteIn, nrl, nrh, ncl, nch, USING_HARRIS);
-    listePointsInteret(image_ndg2, Ix, Iy, In2, &cptWhiteIn2, nrl, nrh, ncl, nch, USING_HARRIS);
+    listInterestPoints(image_ndg, Ix, Iy, In, &cptWhiteIn, nrl, nrh, ncl, nch, USING_HARRIS);
+    listInterestPoints(image_ndg2, Ix, Iy, In2, &cptWhiteIn2, nrl, nrh, ncl, nch, USING_HARRIS);
 
     int cptWhite;
 
@@ -83,7 +83,7 @@ int main(int argc, char** argv)
         cptWhite = cptWhiteIn;
     }
 
-    int intervalAcc = 100; // Interval of accumulationMatrice is : [-50, 50]
+    int intervalAcc = 100; // Interval of accumulationmatrix is : [-50, 50]
     int shift = 50; // We are going to shift negative values from [-50, 50] to [0, intervalAcc], so shift is 50
     int** accumulationMat;
     int vx;
@@ -106,10 +106,12 @@ int main(int argc, char** argv)
     vectorDisplacementEstimation(In, In2, accumulationMat, shift, nrl, nrh, ncl, nch);
 
     electedValueAccumulation(accumulationMat, intervalAcc, &vx, &vy);
+
     // We unshift values
     vx = vx - shift;
     vy = vy - shift;
-    printf("Vector components are: V(%d, %d)\n", vx, vy);
+    
+    printf("Vector components are: V(%d, %d)\n", vx, vy); // Result
 
     SavePGM_bmatrix(In,nrl,nrh,ncl,nch,"res_rice.pgm");
     SavePGM_bmatrix(In2,nrl,nrh,ncl,nch,"res_rice2.pgm");
@@ -124,7 +126,10 @@ int main(int argc, char** argv)
     return 0;
 }
 
-void ApplicationFiltres(byte **I, byte** Ix, byte** Iy, int i, int j)
+/*
+    Applies the Sobel (horizontal and vertical) filter on the image for contour detection.
+*/
+void sobelFilterApplication(byte **I, byte** Ix, byte** Iy, int i, int j)
 {
     Ix[i][j] = floor((Sobel_vertical[0][0] * I[i - 1][j - 1] + Sobel_vertical[0][1] * I[i - 1][j] + Sobel_vertical[0][2] * I[i - 1][j + 1]
             + Sobel_vertical[1][0] * I[i][j - 1] + Sobel_vertical[1][1] * I[i][j] + Sobel_vertical[1][2] * I[i][j + 1]
@@ -135,24 +140,24 @@ void ApplicationFiltres(byte **I, byte** Ix, byte** Iy, int i, int j)
             + Sobel_horizontal[2][0] * I[i + 1][j - 1] + Sobel_horizontal[2][1] * I[i + 1][j] + Sobel_horizontal[2][2] * I[i + 1][j + 1]) / 9);
 }
 
-long detectionHarris(byte **Ix, byte** Iy, int i, int j)
+long harrisDetection(byte **Ix, byte** Iy, int i, int j)
 {
     byte Ixtmp;
     byte Iytmp;
     byte Ixytmp;
 
-    Ixtmp = floor((filtre_gaussien[0][0] * pow(Ix[i - 1][j - 1],2) + filtre_gaussien[0][1] * pow(Ix[i - 1][j],2) + filtre_gaussien[0][2] * pow(Ix[i - 1][j + 1],2)
-            + filtre_gaussien[1][0] * pow(Ix[i][j - 1],2) + filtre_gaussien[1][1] * pow(Ix[i][j],2) + filtre_gaussien[1][2] * pow(Ix[i][j + 1],2)
-            + filtre_gaussien[2][0] * pow(Ix[i + 1][j - 1],2) + filtre_gaussien[2][1] * pow(Ix[i + 1][j],2) + filtre_gaussien[2][2] * pow(Ix[i + 1][j + 1],2)) / (9 * 255));
+    Ixtmp = floor((gaussian_filter[0][0] * pow(Ix[i - 1][j - 1],2) + gaussian_filter[0][1] * pow(Ix[i - 1][j],2) + gaussian_filter[0][2] * pow(Ix[i - 1][j + 1],2)
+            + gaussian_filter[1][0] * pow(Ix[i][j - 1],2) + gaussian_filter[1][1] * pow(Ix[i][j],2) + gaussian_filter[1][2] * pow(Ix[i][j + 1],2)
+            + gaussian_filter[2][0] * pow(Ix[i + 1][j - 1],2) + gaussian_filter[2][1] * pow(Ix[i + 1][j],2) + gaussian_filter[2][2] * pow(Ix[i + 1][j + 1],2)) / (9 * 255));
 
-    Iytmp = floor((filtre_gaussien[0][0] * pow(Iy[i - 1][j - 1],2) + filtre_gaussien[0][1] * pow(Iy[i - 1][j],2) + filtre_gaussien[0][2] * pow(Iy[i - 1][j + 1],2)
-            + filtre_gaussien[1][0] * pow(Iy[i][j - 1],2) + filtre_gaussien[1][1] * pow(Iy[i][j],2) + filtre_gaussien[1][2] * pow(Iy[i][j + 1],2)
-            + filtre_gaussien[2][0] * pow(Iy[i + 1][j - 1],2) + filtre_gaussien[2][1] * pow(Iy[i + 1][j],2) + filtre_gaussien[2][2] * pow(Iy[i + 1][j + 1],2)) / (9 * 255));
+    Iytmp = floor((gaussian_filter[0][0] * pow(Iy[i - 1][j - 1],2) + gaussian_filter[0][1] * pow(Iy[i - 1][j],2) + gaussian_filter[0][2] * pow(Iy[i - 1][j + 1],2)
+            + gaussian_filter[1][0] * pow(Iy[i][j - 1],2) + gaussian_filter[1][1] * pow(Iy[i][j],2) + gaussian_filter[1][2] * pow(Iy[i][j + 1],2)
+            + gaussian_filter[2][0] * pow(Iy[i + 1][j - 1],2) + gaussian_filter[2][1] * pow(Iy[i + 1][j],2) + gaussian_filter[2][2] * pow(Iy[i + 1][j + 1],2)) / (9 * 255));
 
   
-    Ixytmp = floor((filtre_gaussien[0][0] * (Ix[i - 1][j - 1]*Iy[i - 1][j - 1]) + filtre_gaussien[0][1] * (Ix[i - 1][j] * Iy[i - 1][j]) + filtre_gaussien[0][2] * (Ix[i - 1][j + 1] * Iy[i - 1][j + 1])
-            + filtre_gaussien[1][0] * (Ix[i][j - 1] * Iy[i][j - 1]) + filtre_gaussien[1][1] * (Ix[i][j] * Iy[i][j]) + filtre_gaussien[1][2] * (Ix[i][j + 1] * Iy[i][j + 1])
-            + filtre_gaussien[2][0] * (Ix[i + 1][j - 1] * Iy[i + 1][j - 1]) + filtre_gaussien[2][1] * (Ix[i + 1][j] * Iy[i + 1][j]) + filtre_gaussien[2][2] * (Ix[i + 1][j + 1] * Iy[i + 1][j + 1])) / (9 * 255));
+    Ixytmp = floor((gaussian_filter[0][0] * (Ix[i - 1][j - 1]*Iy[i - 1][j - 1]) + gaussian_filter[0][1] * (Ix[i - 1][j] * Iy[i - 1][j]) + gaussian_filter[0][2] * (Ix[i - 1][j + 1] * Iy[i - 1][j + 1])
+            + gaussian_filter[1][0] * (Ix[i][j - 1] * Iy[i][j - 1]) + gaussian_filter[1][1] * (Ix[i][j] * Iy[i][j]) + gaussian_filter[1][2] * (Ix[i][j + 1] * Iy[i][j + 1])
+            + gaussian_filter[2][0] * (Ix[i + 1][j - 1] * Iy[i + 1][j - 1]) + gaussian_filter[2][1] * (Ix[i + 1][j] * Iy[i + 1][j]) + gaussian_filter[2][2] * (Ix[i + 1][j + 1] * Iy[i + 1][j + 1])) / (9 * 255));
     
     return (Ixtmp * Iytmp- Ixytmp) - (LAMBDA * pow((Ixtmp + Iytmp),2));
 }
@@ -183,16 +188,19 @@ long gradient_detector(byte **Ix, byte **Iy, int i, int j){
     return result;
 } 
 
-void listePointsInteret(byte** image,byte** Ix,byte** Iy, byte **In, int* cptWhite, long nrl,long nrh,long ncl,long nch, int isHarris){
+/*
+    List the interest points of a given frame (image) based on a defined detector (either Harris or Gradient based).
+*/
+void listInterestPoints(byte** image,byte** Ix,byte** Iy, byte **In, int* cptWhite, long nrl,long nrh,long ncl,long nch, int isHarris){
 
     int C;
     for (int i = nrl + 1; i < nrh - 1; i++) 
     {
         for (int j = ncl + 1; j < nch - 1; j++) 
         {
-            ApplicationFiltres(image,Ix,Iy,i,j);
+            sobelFilterApplication(image,Ix,Iy,i,j);
             if(isHarris){
-                C = detectionHarris(Ix,Iy,i,j);
+                C = harrisDetection(Ix,Iy,i,j);
             }
             else{
                 C = gradient_detector(Ix, Iy, i, j);
@@ -211,8 +219,15 @@ void listePointsInteret(byte** image,byte** Ix,byte** Iy, byte **In, int* cptWhi
     }
 }
 
+/*
+    Calculate the displacement vector through two frames (two images) and fill the accumulation matrix for further treatment.
+*/
 void vectorDisplacementEstimation(byte** In1, byte** In2, int** accumulationMat, int shift, long nrl, long nrh, long ncl, long nch){
 
+    /*
+        Going through all the first image interest point, when we find one, we check at the same coordinate on the second image (t+1) if it is
+        still an interest point, if not we search for the nearest interest point.
+    */
     for (int i = nrl + 1; i < nrh - 1; i++) 
     {
         for (int j = ncl + 1; j < nch - 1; j++) 
@@ -220,24 +235,31 @@ void vectorDisplacementEstimation(byte** In1, byte** In2, int** accumulationMat,
             int condWhite = (In1[i][j] == BLANC);
             if(condWhite){
                 if((In1[i][j] == In2[i][j])){
-                    // Incrementing to the accumulation matrice for nil vector
+                    // Incrementing to the accumulation matrix for nil vector
                     accumulationMat[0][0] = accumulationMat[0][0] + 1;
                 }
                 else{
                     int found = 0;
                     int iterLoop = 1;
+                    // We are going to iterate through our second image (t+1) to get the closest interest point based on our first image's interst point (t)
+                    // Until we found it for the given i,j coordinate, we keep incrementing the search radius
                     while(found != 1 && iterLoop <= 50){
                         for(int k = i - iterLoop; k < iterLoop; k++){
                             for(int l = j - iterLoop; l < iterLoop; l++){
                                 if((k > nrl + 1 && k < nrh - 1) && (l > ncl + 1 && l < nch - 1)){
                                     if(In2[k][l] == BLANC){
+                                        // Processing the vector from the difference of both images on the interest points coordinates
                                         int vx = (k - i);
                                         int vy = (l - j);
                                         if((vx > -shift && vx < shift) && (vy > -shift && vy < shift)){
-                                            //We shift the values
+                                            // We shift the vector components for later indexation on the matrix
                                             vx = vx + shift;
                                             vy = vy + shift;
+
+                                            // We increment on each components of our vector the accumulation matrix
                                             accumulationMat[vx][vy] = accumulationMat[vx][vy] + 1;
+
+                                            // Setting the boolean to true when we found ONE interest point on the second Image
                                             found = 1;
                                             goto out;
                                         }
@@ -250,11 +272,14 @@ void vectorDisplacementEstimation(byte** In1, byte** In2, int** accumulationMat,
                 }                    
             }
             out:
-                //printf("went to\n");
+                //printf("went out\n");
         }
     }
 }
 
+/*
+    Goes through the accumulation matrix to find the nominated vector.
+*/
 void electedValueAccumulation(int** accumulationMat, int accuSize, int* vx, int* vy){
     int maxValue = 0;
     int maxX = 0;
