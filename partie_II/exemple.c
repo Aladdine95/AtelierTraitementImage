@@ -18,7 +18,7 @@
 #define IMAGE_GREYSCALE 0
 #define IMAGE_RGB 1
 #define LAMBDA 0.1
-#define USING_HARRIS 0
+#define USING_HARRIS 1
 
 
 const int reponse_impulsionnelle[3][3] = {{1,1,1}, {1,1,1}, {1,1,1}};
@@ -33,14 +33,6 @@ const int filtre_gaussien[3][3] = {
 const int gradient_mask_detector[3][3] = {{1, 1, 1}, {1, 0, 1}, {1, 1, 1}};
 
 /****************************/
-/*         STRUCTS          */
-/****************************/
-typedef struct Vector{
-    int vx;
-    int vy;
-}Vector;
-
-/****************************/
 /*       PROTOTYPES         */
 /****************************/
 
@@ -50,11 +42,11 @@ void convert_rbg_to_greyscale(rgb8** image_rgb,byte** image_ndg,long nrl, long n
 byte convolutionGradientMask(byte **I, int i, int j);
 long gradient_detector(byte **Ix, byte **Iy, int i, int j);
 void listePointsInteret(byte** image, byte** Ix, byte** Iy, byte **In, int* cptWhite, long nrl,long nrh,long ncl,long nch, int isHarris);
-void vectorDisplacementEstimation(byte** In1, byte** In2, Vector* vectors, long nrl, long nrh, long ncl, long nch);
+void vectorDisplacementEstimation(byte** In1, byte** In2, int** accumulationMat, int shift, long nrl, long nrh, long ncl, long nch);
+void electedValueAccumulation(int** accumulationMat, int accuSize, int* vx, int* vy);
 
 int main(int argc, char** argv)
 {
-    printf("Debut");
     byte **image_ndg; // Image en niveaux de gris
     byte **image_ndg2;
     byte **Ix;
@@ -82,22 +74,8 @@ int main(int argc, char** argv)
     listePointsInteret(image_ndg, Ix, Iy, In, &cptWhiteIn, nrl, nrh, ncl, nch, USING_HARRIS);
     listePointsInteret(image_ndg2, Ix, Iy, In2, &cptWhiteIn2, nrl, nrh, ncl, nch, USING_HARRIS);
 
-    //JE VEUX SAVOIR SI LES IN SONT BIEN REMPLIS
-    // printf("MON IN1 et MON IN2\n");
-    // for (int i = nrl + 1; i < nrh - 1; i++) 
-    // {
-    //     for (int j = ncl + 1; j < nch - 1; j++) 
-    //     {
-    //         printf("In1 %d | %d ; value = %d\n", i, j, In[i][j]);
-    //         printf("In2 %d | %d ; value = %d\n", i, j, In2[i][j]);
-    //     }
-    // }
-    ////////////////////
-
-
     int cptWhite;
-    // printf("cptWhiteIn : %d", cptWhiteIn);
-    // printf("cptWhiteIn2 : %d", cptWhiteIn2);
+
     if(cptWhiteIn <= cptWhiteIn2){
         cptWhite = cptWhiteIn2;
     }
@@ -105,18 +83,33 @@ int main(int argc, char** argv)
         cptWhite = cptWhiteIn;
     }
 
-    // printf("cptWhite is : %d\n", cptWhite);
+    int intervalAcc = 100; // Interval of accumulationMatrice is : [-50, 50]
+    int shift = 50; // We are going to shift negative values from [-50, 50] to [0, intervalAcc], so shift is 50
+    int** accumulationMat;
+    int vx;
+    int vy;
 
-    Vector* vectors = malloc(cptWhite*sizeof(Vector));
+    vx = 0;
+    vy = 0;
 
-    vectorDisplacementEstimation(In, In2, vectors, nrl, nrh, ncl, nch);
-    
-    for(int index = 0; index < cptWhite; index++){
-        if(vectors[index].vx != 0 && vectors[index].vy != 0)
-        {
-            printf("Vector nÂ°%d | vx = %d ; vy = %d\n", index, vectors[index].vx, vectors[index].vy);
+    accumulationMat = malloc(intervalAcc * sizeof(*accumulationMat));
+    for(int i = 0; i < intervalAcc; i++){
+        accumulationMat[i] = malloc(intervalAcc * sizeof(accumulationMat[0]));
+    }
+
+    for(int i = 0; i < intervalAcc; i++){
+        for(int j = 0; j < intervalAcc; j++){
+            accumulationMat[i][j] = 0;
         }
     }
+
+    vectorDisplacementEstimation(In, In2, accumulationMat, shift, nrl, nrh, ncl, nch);
+
+    electedValueAccumulation(accumulationMat, intervalAcc, &vx, &vy);
+    // We unshift values
+    vx = vx - shift;
+    vy = vy - shift;
+    printf("Vector components are: V(%d, %d)\n", vx, vy);
 
     SavePGM_bmatrix(In,nrl,nrh,ncl,nch,"res_rice.pgm");
     SavePGM_bmatrix(In2,nrl,nrh,ncl,nch,"res_rice2.pgm");
@@ -218,8 +211,8 @@ void listePointsInteret(byte** image,byte** Ix,byte** Iy, byte **In, int* cptWhi
     }
 }
 
-void vectorDisplacementEstimation(byte** In1, byte** In2, Vector* vectors, long nrl, long nrh, long ncl, long nch){
-    int iteration = 0;
+void vectorDisplacementEstimation(byte** In1, byte** In2, int** accumulationMat, int shift, long nrl, long nrh, long ncl, long nch){
+
     for (int i = nrl + 1; i < nrh - 1; i++) 
     {
         for (int j = ncl + 1; j < nch - 1; j++) 
@@ -227,27 +220,27 @@ void vectorDisplacementEstimation(byte** In1, byte** In2, Vector* vectors, long 
             int condWhite = (In1[i][j] == BLANC);
             if(condWhite){
                 if((In1[i][j] == In2[i][j])){
-                    Vector vect;
-                    vect.vx = 0;
-                    vect.vy = 0;
-                    vectors[iteration] = vect;
-                    iteration++; 
+                    // Incrementing to the accumulation matrice for nil vector
+                    accumulationMat[0][0] = accumulationMat[0][0] + 1;
                 }
                 else{
                     int found = 0;
                     int iterLoop = 1;
-                    while(found != 1){
-                        for(int k = i; k < iterLoop; k++){
-                            for(int l = j; l < iterLoop; l++){
+                    while(found != 1 && iterLoop <= 50){
+                        for(int k = i - iterLoop; k < iterLoop; k++){
+                            for(int l = j - iterLoop; l < iterLoop; l++){
                                 if((k > nrl + 1 && k < nrh - 1) && (l > ncl + 1 && l < nch - 1)){
                                     if(In2[k][l] == BLANC){
-                                        Vector vect;
-                                        vect.vx = k;
-                                        vect.vy = l;
-                                        vectors[iteration] = vect;
-                                        iteration++;
-                                        found = 1;
-                                        break;
+                                        int vx = (k - i);
+                                        int vy = (l - j);
+                                        if((vx > -shift && vx < shift) && (vy > -shift && vy < shift)){
+                                            //We shift the values
+                                            vx = vx + shift;
+                                            vy = vy + shift;
+                                            accumulationMat[vx][vy] = accumulationMat[vx][vy] + 1;
+                                            found = 1;
+                                            goto out;
+                                        }
                                     }
                                 }
                             }
@@ -256,6 +249,29 @@ void vectorDisplacementEstimation(byte** In1, byte** In2, Vector* vectors, long 
                     }
                 }                    
             }
+            out:
+                //printf("went to\n");
         }
     }
+}
+
+void electedValueAccumulation(int** accumulationMat, int accuSize, int* vx, int* vy){
+    int maxValue = 0;
+    int maxX = 0;
+    int maxY = 0;
+    for(int i = 0; i < accuSize; i++){
+        for(int j = 0; j < accuSize; j++){
+            if(accumulationMat[i][j] != 0){
+               printf("accumulationMat[%d][%d] : %ld\n",i, j, accumulationMat[i][j]);
+            }
+            if(maxValue < accumulationMat[i][j]){
+                maxValue = accumulationMat[i][j];
+                maxX = i;
+                maxY = j;
+            }
+        }
+    }
+    vx = maxX;
+    vy = maxY;
+    printf("Max value is (%d, %d) : %d\n", vx, vy, maxValue);
 }
