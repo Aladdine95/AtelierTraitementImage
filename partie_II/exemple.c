@@ -18,7 +18,7 @@
 #define IMAGE_GREYSCALE 0
 #define IMAGE_RGB 1
 #define LAMBDA 0.2
-#define USING_HARRIS 0
+#define USING_HARRIS 1
 
 
 const int reponse_impulsionnelle[3][3] = {{1,1,1}, {1,1,1}, {1,1,1}};
@@ -78,9 +78,22 @@ int main(int argc, char** argv)
     listePointsInteret(image_ndg, Ix, Iy, In, &cptWhiteIn, nrl, nrh, ncl, nch, USING_HARRIS);
     listePointsInteret(image_ndg2, Ix, Iy, In2, &cptWhiteIn2, nrl, nrh, ncl, nch, USING_HARRIS);
 
+    //JE VEUX SAVOIR SI LES IN SONT BIEN REMPLIS
+    // printf("MON IN1 et MON IN2\n");
+    // for (int i = nrl + 1; i < nrh - 1; i++) 
+    // {
+    //     for (int j = ncl + 1; j < nch - 1; j++) 
+    //     {
+    //         printf("In1 %d | %d ; value = %d\n", i, j, In[i][j]);
+    //         printf("In2 %d | %d ; value = %d\n", i, j, In2[i][j]);
+    //     }
+    // }
+    ////////////////////
+
+
     int cptWhite;
-    printf("cptWhiteIn : %d", cptWhiteIn);
-    printf("cptWhiteIn2 : %d", cptWhiteIn2);
+    // printf("cptWhiteIn : %d", cptWhiteIn);
+    // printf("cptWhiteIn2 : %d", cptWhiteIn2);
     if(cptWhiteIn <= cptWhiteIn2){
         cptWhite = cptWhiteIn2;
     }
@@ -88,20 +101,21 @@ int main(int argc, char** argv)
         cptWhite = cptWhiteIn;
     }
 
-    printf("cptWhite is : %d\n", cptWhite);
+    // printf("cptWhite is : %d\n", cptWhite);
 
     Vector* vectors = malloc(cptWhite*sizeof(Vector));
 
     vectorDisplacementEstimation(In, In2, vectors, nrl, nrh, ncl, nch);
     
-    for(int index = 0; index < cptWhite; index++){
-        if(vectors[index].vx != 0 && vectors[index].vy != 0)
-        {
-            printf("Vector n°%d | vx = %d ; vy = %d\n", index, vectors[index].vx, vectors[index].vy);
-        }
-    }
+    // for(int index = 0; index < cptWhite; index++){
+    //     if(vectors[index].vx != 0 && vectors[index].vy != 0)
+    //     {
+    //         printf("Vector n°%d | vx = %d ; vy = %d\n", index, vectors[index].vx, vectors[index].vy);
+    //     }
+    // }
 
     SavePGM_bmatrix(In,nrl,nrh,ncl,nch,"res_rice.pgm");
+    SavePGM_bmatrix(In2,nrl,nrh,ncl,nch,"res_rice2.pgm");
 
     free_bmatrix(image_ndg,nrl,nrh,ncl,nch);
     free_bmatrix(image_ndg2,nrl,nrh,ncl,nch);
@@ -178,7 +192,6 @@ long gradient_detector(byte **Ix, byte **Iy, int i, int j){
 
 void listePointsInteret(byte** image,byte** Ix,byte** Iy, byte **In, int* cptWhite, long nrl,long nrh,long ncl,long nch, int isHarris){
 
-    In=bmatrix(nrl,nrh,ncl,nch);
     int C;
     for (int i = nrl + 1; i < nrh - 1; i++) 
     {
@@ -191,15 +204,16 @@ void listePointsInteret(byte** image,byte** Ix,byte** Iy, byte **In, int* cptWhi
             else{
                 C = gradient_detector(Ix, Iy, i, j);
             }
-            if(C != 0)
-                printf("x : %d y : %d | C : %d\n", i,j,C);
+            // if(C != 0)
+            //     printf("x : %d y : %d | C : %d | ABS : %d\n", i,j,C, abs(C));
             
             if(abs(C) > SEUIL_C){
                 In[i][j] = BLANC;
                 *cptWhite = *cptWhite + 1;
             }
-            else
+            else{
                 In[i][j] = NOIR;
+            }   
         }
     }
 }
@@ -212,7 +226,9 @@ void vectorDisplacementEstimation(byte** In1, byte** In2, Vector* vectors, long 
         {
             int condWhite = (In1[i][j] == BLANC);
             if(condWhite){
+                printf("je suis un pixel blanc\n");
                 if((In1[i][j] == In2[i][j])){
+                    printf("je rentre dans la cond de IN1 = IN2\n");
                     Vector vect;
                     vect.vx = 0;
                     vect.vy = 0;
@@ -220,24 +236,70 @@ void vectorDisplacementEstimation(byte** In1, byte** In2, Vector* vectors, long 
                     iteration++; 
                 }
                 else{
+                    printf("je rentre dans la cond de IN1 != IN2\n");
+                    // Vector vect;
+                    // vect.vx = 1;
+                    // vect.vy = 1;
+                    // vectors[iteration] = vect;
+                    // iteration++;
                     int found = 0;
                     int iterLoop = 1;
                     while(found != 1){
-                        for(int k = i; k < iterLoop; k++){
-                            for(int l = j; l < iterLoop; l++){
-                                int abscissa = k;
-                                int ordinate = l;
-                                if((abscissa <= nrl + 1 && abscissa >= nrh - 1) && (ordinate <= nch - 1 && ordinate >= ncl + 1)){
-                                    if(In2[k][l] == BLANC){
-                                        Vector vect;
-                                        vect.vx = k;
-                                        vect.vy = l;
-                                        vectors[iteration] = vect;
-                                        iteration++;
-                                        found = 1;
-                                        break;
-                                    }
+                        // for(int k = i; k < iterLoop; k++){
+                        //     for(int l = j; l < iterLoop ; l++){
+                        for(int k = 1; k < nrh-1; k++){
+                            for(int l = 1; l < k+1; l++){
+                                
+                                //premier cas : point sur meme ligne que i alors
+                                    //sous cas 1 : meme colonne que j alors   In2[i][j] = ce cas est pas possible pcq sinon je suis en i/j et donc dans le cas d'avant
+                                    //je ne le fais pas du coup
+
+                                    //sous cas 2 : colonne plus grande que j alors L++   In2[i][j+l]
+                                if(In2[i][j+l] == BLANC){
+                                    printf("jai un point\n");
                                 }
+
+                                //     //sous cas 3 : colonne plus petite que j alors L--     In2[i][j-l]
+                                if(In2[i][j+l] == BLANC){
+                                    printf("jai un point\n");
+                                }
+
+
+                                //deuxieme cas : point sur ligne plus grande que i alors i= i +K
+                                    //sous cas 1 : meme colonne que j alors   In2[i+k][j]
+
+
+                                    //sous cas 2 : colonne plus grande que j alors  In2[i+k][j+l]
+
+
+                                    //sous cas 3 : colonne plus petite que j alors  In2[i+k][j-l]
+
+
+
+                                //troisieme cas : point sur ligne plus petite que i alors i= i -K
+                                    //sous cas 1 : meme colonne que j alors  In2[i-k][j]
+
+
+                                    //sous cas 2 : colonne plus grande que j alors  In2[i-k][j]
+
+
+                                    //sous cas 3 : colonne plus petite que j alors  In2[i-k][j]
+
+                                // printf("je suis dans le for\n");
+                                // int abscissa = k;
+                                // int ordinate = l;
+
+                                // if((abscissa <= nrl + 1 && abscissa >= nrh - 1) && (ordinate <= nch - 1 && ordinate >= ncl + 1)){
+                                //     if(In2[k][l] == BLANC){
+                                //         Vector vect;
+                                //         vect.vx = k;
+                                //         vect.vy = l;
+                                //         vectors[iteration] = vect;
+                                //         iteration++;
+                                //         found = 1;
+                                //         break;
+                                //     }
+                                // }
                             }
                         }
                         iterLoop++;
