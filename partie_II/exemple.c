@@ -57,8 +57,8 @@ int main(int argc, char** argv)
     long C;
     long nrh,nrl,nch,ncl;
 
-    image_ndg=LoadPGM_bmatrix("cubes.pgm",&nrl,&nrh,&ncl,&nch);
-    image_ndg2=LoadPGM_bmatrix("cubes.pgm",&nrl,&nrh,&ncl,&nch);
+    image_ndg=LoadPGM_bmatrix("rice.pgm",&nrl,&nrh,&ncl,&nch);
+    image_ndg2=LoadPGM_bmatrix("rice2.pgm",&nrl,&nrh,&ncl,&nch);
 
     int cptWhiteIn;
     int cptWhiteIn2;
@@ -114,10 +114,10 @@ int main(int argc, char** argv)
     vx = vx - shift;
     vy = vy - shift;
     
-    printf("Vector components are: V(%d, %d)\n", vx, vy); // Result
+    printf("Vector components are: V(%d, %d) because nominated %d times.\n", vx, vy, accumulationMat[vx+shift][vy+shift]); // Result
 
-    SavePGM_bmatrix(In,nrl,nrh,ncl,nch,"res_cube.pgm");
-    SavePGM_bmatrix(In2,nrl,nrh,ncl,nch,"res_cubes.pgm");
+    SavePGM_bmatrix(In,nrl,nrh,ncl,nch,"res_rice.pgm");
+    SavePGM_bmatrix(In2,nrl,nrh,ncl,nch,"res_rice2.pgm");
 
     free_bmatrix(image_ndg,nrl,nrh,ncl,nch);
     free_bmatrix(image_ndg2,nrl,nrh,ncl,nch);
@@ -240,7 +240,7 @@ void vectorDisplacementEstimation(byte** In1, byte** In2, int** accumulationMat,
             if(condWhite){
                 if((In1[i][j] == In2[i][j])){
                     // Incrementing to the accumulation matrix for nil vector
-                    accumulationMat[0][0] = accumulationMat[0][0] + 1;
+                    accumulationMat[0 + shift][0 + shift] = accumulationMat[0 + shift][0 + shift] + 1;
                 }
                 else{
                     int found = 0;
@@ -253,8 +253,8 @@ void vectorDisplacementEstimation(byte** In1, byte** In2, int** accumulationMat,
                                 if((k > nrl + 1 && k < nrh - 1) && (l > ncl + 1 && l < nch - 1)){
                                     if(In2[k][l] == BLANC){
                                         // Processing the vector from the difference of both images on the interest points coordinates
-                                        int vx = (k - i);
-                                        int vy = (l - j);
+                                        int vy = (k - i); //vector ik
+                                        int vx = (l - j); //vector jl
                                         if((vx > -shift && vx < shift) && (vy > -shift && vy < shift)){
                                             // We shift the vector components for later indexation on the matrix
                                             vx = vx + shift;
@@ -288,8 +288,8 @@ void electedValueAccumulation(int** accumulationMat, int accuSize, int* vx, int*
     int maxValue = 0;
     int maxX = 0;
     int maxY = 0;
-    for(int i = 0; i < accuSize; i++){
-        for(int j = 0; j < accuSize; j++){
+    for(int i = 1; i < accuSize; i++){
+        for(int j = 1; j < accuSize; j++){
             if(accumulationMat[i][j] != 0){
                printf("accumulationMat[%d][%d] : %ld\n",i, j, accumulationMat[i][j]);
             }
@@ -300,7 +300,7 @@ void electedValueAccumulation(int** accumulationMat, int accuSize, int* vx, int*
             }
         }
     }
-    vx = maxX;
-    vy = maxY;
-    printf("Max value is (%d, %d) : %d\n", vx, vy, maxValue);
+    *vx = maxX;
+    *vy = maxY;
+    printf("Max value is (%d, %d) : %d\n", *vx, *vy, maxValue);
 }
