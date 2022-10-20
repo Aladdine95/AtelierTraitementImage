@@ -12,7 +12,7 @@
 /*      CONSTANTS           */
 /****************************/
 
-#define SEUIL_C 200
+#define SEUIL_C 100
 #define BLANC 255
 #define NOIR 0
 #define IMAGE_GREYSCALE 0
@@ -26,9 +26,9 @@ const int lower_mask[3][3] = {{0.1, 0.1, 0.1}, {0.1, 0.1, 0.1}, {0.1, 0.1, 0.1}}
 const int Sobel_horizontal[3][3] = {{-1,0,1} , {-2,0,2}, {-1,0,1}}; //Gradient horizontal Y
 const int Sobel_vertical[3][3] = {{-1,-2,-1} , {0,0,0}, {1,2,1}}; //Gradient vertical X
 const int gaussian_filter[3][3] = {
-    {0.2,0.1,0.2}, 
-    {0.7,1,0.7}, 
-    {0.5,0.1,0.5}
+    {0.1,0.25,0.1}, 
+    {0.1,1,0.1}, 
+    {0.1,0.25,0.1}
     };
 const int gradient_mask_detector[3][3] = {{1, 1, 1}, {1, 0, 1}, {1, 1, 1}};
 
@@ -73,6 +73,9 @@ int main(int argc, char** argv)
 
     listInterestPoints(image_ndg, Ix, Iy, In, &cptWhiteIn, nrl, nrh, ncl, nch, USING_HARRIS);
     listInterestPoints(image_ndg2, Ix, Iy, In2, &cptWhiteIn2, nrl, nrh, ncl, nch, USING_HARRIS);
+
+    SavePGM_bmatrix(Ix,nrl,nrh,ncl,nch,"res_Ix.pgm");
+    SavePGM_bmatrix(Iy,nrl,nrh,ncl,nch,"res_Iy.pgm");
 
     int cptWhite;
 
@@ -131,13 +134,13 @@ int main(int argc, char** argv)
 */
 void sobelFilterApplication(byte **I, byte** Ix, byte** Iy, int i, int j)
 {
-    Ix[i][j] = floor((Sobel_vertical[0][0] * I[i - 1][j - 1] + Sobel_vertical[0][1] * I[i - 1][j] + Sobel_vertical[0][2] * I[i - 1][j + 1]
+    Ix[i][j] = abs(floor((Sobel_vertical[0][0] * I[i - 1][j - 1] + Sobel_vertical[0][1] * I[i - 1][j] + Sobel_vertical[0][2] * I[i - 1][j + 1]
             + Sobel_vertical[1][0] * I[i][j - 1] + Sobel_vertical[1][1] * I[i][j] + Sobel_vertical[1][2] * I[i][j + 1]
-            + Sobel_vertical[2][0] * I[i + 1][j - 1] + Sobel_vertical[2][1] * I[i + 1][j] + Sobel_vertical[2][2] * I[i + 1][j + 1]) / 9);
+            + Sobel_vertical[2][0] * I[i + 1][j - 1] + Sobel_vertical[2][1] * I[i + 1][j] + Sobel_vertical[2][2] * I[i + 1][j + 1]) / 4));
 
-    Iy[i][j] = floor((Sobel_horizontal[0][0] * I[i - 1][j - 1] + Sobel_horizontal[0][1] * I[i - 1][j] + Sobel_horizontal[0][2] * I[i - 1][j + 1]
+    Iy[i][j] = abs(floor((Sobel_horizontal[0][0] * I[i - 1][j - 1] + Sobel_horizontal[0][1] * I[i - 1][j] + Sobel_horizontal[0][2] * I[i - 1][j + 1]
             + Sobel_horizontal[1][0] * I[i][j - 1] + Sobel_horizontal[1][1] * I[i][j] + Sobel_horizontal[1][2] * I[i][j + 1]
-            + Sobel_horizontal[2][0] * I[i + 1][j - 1] + Sobel_horizontal[2][1] * I[i + 1][j] + Sobel_horizontal[2][2] * I[i + 1][j + 1]) / 9);
+            + Sobel_horizontal[2][0] * I[i + 1][j - 1] + Sobel_horizontal[2][1] * I[i + 1][j] + Sobel_horizontal[2][2] * I[i + 1][j + 1]) / 4));
 }
 
 long harrisDetection(byte **Ix, byte** Iy, int i, int j)
@@ -185,7 +188,7 @@ long gradient_detector(byte **Ix, byte **Iy, int i, int j){
             + gradient_mask_detector[2][0] * (Ix[i + 1][j - 1] * Iy[i + 1][j - 1]) + gradient_mask_detector[2][1] * (Ix[i + 1][j] * Iy[i + 1][j]) + gradient_mask_detector[2][2] * (Ix[i + 1][j + 1] * Iy[i + 1][j + 1])) / (9 * 255));
     /* if(IxIy != 0 && IxIyConvolued != 0)
         printf("IxIy : %d | IxIyConvolued : %d\n", IxIy, IxIyConvolued); */
-    long result = ((pow(Ix[i][j], 2) * pow(IyConvolued, 2)) + (pow(Iy[i][j], 2) * pow(IxConvolued, 2)) - ((2*IxIy) * IxIyConvolued)) / ((pow(IxConvolued, 2) + pow(IyConvolued, 2)) * 255);
+    long result = ((pow(Ix[i][j], 2) * pow(IyConvolued, 2)) + (pow(Iy[i][j], 2) * pow(IxConvolued, 2)) - ((2*IxIy) * IxIyConvolued)) / ((pow(IxConvolued, 2) + pow(IyConvolued, 2)));
     return result;
 } 
 
