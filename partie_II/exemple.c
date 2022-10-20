@@ -18,7 +18,7 @@
 #define IMAGE_GREYSCALE 0
 #define IMAGE_RGB 1
 #define LAMBDA 0.1
-#define USING_HARRIS 1
+#define USING_HARRIS 0
 
 
 const int impulsionnal_response[3][3] = {{1,1,1}, {1,1,1}, {1,1,1}};
@@ -57,8 +57,8 @@ int main(int argc, char** argv)
     long C;
     long nrh,nrl,nch,ncl;
 
-    image_ndg=LoadPGM_bmatrix("rice.pgm",&nrl,&nrh,&ncl,&nch);
-    image_ndg2=LoadPGM_bmatrix("rice2.pgm",&nrl,&nrh,&ncl,&nch);
+    image_ndg=LoadPGM_bmatrix("cubes.pgm",&nrl,&nrh,&ncl,&nch);
+    image_ndg2=LoadPGM_bmatrix("cubes.pgm",&nrl,&nrh,&ncl,&nch);
 
     int cptWhiteIn;
     int cptWhiteIn2;
@@ -113,8 +113,8 @@ int main(int argc, char** argv)
     
     printf("Vector components are: V(%d, %d)\n", vx, vy); // Result
 
-    SavePGM_bmatrix(In,nrl,nrh,ncl,nch,"res_rice.pgm");
-    SavePGM_bmatrix(In2,nrl,nrh,ncl,nch,"res_rice2.pgm");
+    SavePGM_bmatrix(In,nrl,nrh,ncl,nch,"res_cube.pgm");
+    SavePGM_bmatrix(In2,nrl,nrh,ncl,nch,"res_cubes.pgm");
 
     free_bmatrix(image_ndg,nrl,nrh,ncl,nch);
     free_bmatrix(image_ndg2,nrl,nrh,ncl,nch);
@@ -183,8 +183,9 @@ long gradient_detector(byte **Ix, byte **Iy, int i, int j){
     IxIyConvolued = floor((gradient_mask_detector[0][0] * (Ix[i - 1][j - 1]*Iy[i - 1][j - 1]) + gradient_mask_detector[0][1] * (Ix[i - 1][j] * Iy[i - 1][j]) + gradient_mask_detector[0][2] * (Ix[i - 1][j + 1] * Iy[i - 1][j + 1])
             + gradient_mask_detector[1][0] * (Ix[i][j - 1] * Iy[i][j - 1]) + gradient_mask_detector[1][1] * (Ix[i][j] * Iy[i][j]) + gradient_mask_detector[1][2] * (Ix[i][j + 1] * Iy[i][j + 1])
             + gradient_mask_detector[2][0] * (Ix[i + 1][j - 1] * Iy[i + 1][j - 1]) + gradient_mask_detector[2][1] * (Ix[i + 1][j] * Iy[i + 1][j]) + gradient_mask_detector[2][2] * (Ix[i + 1][j + 1] * Iy[i + 1][j + 1])) / (9 * 255));
-
-    long result = ((pow(Ix[i][j], 2) * pow(IyConvolued, 2)) + (pow(Iy[i][j], 2) * pow(IxConvolued, 2)) - ((2*IxIy) * IxIyConvolued)) / (pow(IxConvolued, 2) + pow(IyConvolued, 2));
+    /* if(IxIy != 0 && IxIyConvolued != 0)
+        printf("IxIy : %d | IxIyConvolued : %d\n", IxIy, IxIyConvolued); */
+    long result = ((pow(Ix[i][j], 2) * pow(IyConvolued, 2)) + (pow(Iy[i][j], 2) * pow(IxConvolued, 2)) - ((2*IxIy) * IxIyConvolued)) / ((pow(IxConvolued, 2) + pow(IyConvolued, 2)) * 255);
     return result;
 } 
 
@@ -205,8 +206,8 @@ void listInterestPoints(byte** image,byte** Ix,byte** Iy, byte **In, int* cptWhi
             else{
                 C = gradient_detector(Ix, Iy, i, j);
             }
-            /* if(C != 0)
-                printf("x : %d y : %d | C : %d | ABS : %d\n", i,j,C, abs(C)); */
+            if(C != 0)
+                printf("x : %d y : %d | C : %d | ABS : %d\n", i,j,C, abs(C));
             
             if(abs(C) > SEUIL_C){
                 In[i][j] = BLANC;
