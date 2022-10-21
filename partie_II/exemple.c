@@ -57,8 +57,8 @@ int main(int argc, char** argv)
     long C;
     long nrh,nrl,nch,ncl;
 
-    image_ndg=LoadPGM_bmatrix("rice.pgm",&nrl,&nrh,&ncl,&nch);
-    image_ndg2=LoadPGM_bmatrix("rice2.pgm",&nrl,&nrh,&ncl,&nch);
+    image_ndg=LoadPGM_bmatrix("cubes.pgm",&nrl,&nrh,&ncl,&nch);
+    image_ndg2=LoadPGM_bmatrix("cubes_shifted.pgm",&nrl,&nrh,&ncl,&nch);
 
     int cptWhiteIn;
     int cptWhiteIn2;
@@ -106,18 +106,26 @@ int main(int argc, char** argv)
         }
     }
 
+/*     for (int i = nrl + 1; i < nrh - 1; i++) 
+    {
+        for (int j = ncl + 1; j < nch - 1; j++) 
+        {
+            if(In2[i][j] != 0)
+                //printf("In2[%d][%d] : %d\n", i, j, In2[i][j]);
+        }
+    } */
     vectorDisplacementEstimation(In, In2, accumulationMat, shift, nrl, nrh, ncl, nch);
 
     electedValueAccumulation(accumulationMat, intervalAcc, &vx, &vy);
 
-    // We unshift values
+    // We unshift valuesq
     vx = vx - shift;
     vy = vy - shift;
     
     printf("Vector components are: V(%d, %d) because nominated %d times.\n", vx, vy, accumulationMat[vx+shift][vy+shift]); // Result
 
-    SavePGM_bmatrix(In,nrl,nrh,ncl,nch,"res_rice.pgm");
-    SavePGM_bmatrix(In2,nrl,nrh,ncl,nch,"res_rice2.pgm");
+    SavePGM_bmatrix(In,nrl,nrh,ncl,nch,"res_cubes.pgm");
+    SavePGM_bmatrix(In2,nrl,nrh,ncl,nch,"res_cubes_shifted.pgm");
 
     free_bmatrix(image_ndg,nrl,nrh,ncl,nch);
     free_bmatrix(image_ndg2,nrl,nrh,ncl,nch);
@@ -165,6 +173,7 @@ long harrisDetection(byte **Ix, byte** Iy, int i, int j)
     return (Ixtmp * Iytmp- Ixytmp) - (LAMBDA * pow((Ixtmp + Iytmp),2));
 }
 
+
 byte convolutionGradientMask(byte **I, int i, int j)
 {
     return floor((gradient_mask_detector[0][0] * I[i - 1][j - 1] + gradient_mask_detector[0][1] * I[i - 1][j] + gradient_mask_detector[0][2] * I[i - 1][j + 1]
@@ -186,8 +195,7 @@ long gradient_detector(byte **Ix, byte **Iy, int i, int j){
     IxIyConvolued = floor((gradient_mask_detector[0][0] * (Ix[i - 1][j - 1]*Iy[i - 1][j - 1]) + gradient_mask_detector[0][1] * (Ix[i - 1][j] * Iy[i - 1][j]) + gradient_mask_detector[0][2] * (Ix[i - 1][j + 1] * Iy[i - 1][j + 1])
             + gradient_mask_detector[1][0] * (Ix[i][j - 1] * Iy[i][j - 1]) + gradient_mask_detector[1][1] * (Ix[i][j] * Iy[i][j]) + gradient_mask_detector[1][2] * (Ix[i][j + 1] * Iy[i][j + 1])
             + gradient_mask_detector[2][0] * (Ix[i + 1][j - 1] * Iy[i + 1][j - 1]) + gradient_mask_detector[2][1] * (Ix[i + 1][j] * Iy[i + 1][j]) + gradient_mask_detector[2][2] * (Ix[i + 1][j + 1] * Iy[i + 1][j + 1])) / (9 * 255));
-    /* if(IxIy != 0 && IxIyConvolued != 0)
-        printf("IxIy : %d | IxIyConvolued : %d\n", IxIy, IxIyConvolued); */
+    //printf("IxIy : %d | IxIyConvolued : %d\n", IxIy, IxIyConvolued); 
     long result = ((pow(Ix[i][j], 2) * pow(IyConvolued, 2)) + (pow(Iy[i][j], 2) * pow(IxConvolued, 2)) - ((2*IxIy) * IxIyConvolued)) / ((pow(IxConvolued, 2) + pow(IyConvolued, 2)));
     return result;
 } 
@@ -209,9 +217,9 @@ void listInterestPoints(byte** image,byte** Ix,byte** Iy, byte **In, int* cptWhi
             else{
                 C = gradient_detector(Ix, Iy, i, j);
             }
-            if(C != 0)
+            /* if(C != 0)
                 printf("x : %d y : %d | C : %d | ABS : %d\n", i,j,C, abs(C));
-            
+             */
             if(abs(C) > SEUIL_C){
                 In[i][j] = BLANC;
                 *cptWhite = *cptWhite + 1;
@@ -240,16 +248,16 @@ void vectorDisplacementEstimation(byte** In1, byte** In2, int** accumulationMat,
             if(condWhite){
                 if((In1[i][j] == In2[i][j])){
                     // Incrementing to the accumulation matrix for nil vector
-                    accumulationMat[0 + shift][0 + shift] = accumulationMat[0 + shift][0 + shift] + 1;
+                    //accumulationMat[0 + shift][0 + shift] = accumulationMat[0 + shift][0 + shift] + 1;
                 }
                 else{
                     int found = 0;
                     int iterLoop = 1;
                     // We are going to iterate through our second image (t+1) to get the closest interest point based on our first image's interst point (t)
                     // Until we found it for the given i,j coordinate, we keep incrementing the search radius
-                    while(found != 1 && iterLoop <= 50){
-                        for(int k = i - iterLoop; k < iterLoop; k++){
-                            for(int l = j - iterLoop; l < iterLoop; l++){
+                    while(found != 1 && iterLoop <= 400){
+                        for(int k = i - iterLoop; k < i + iterLoop; k++){
+                            for(int l = j - iterLoop; l < j + iterLoop; l++){
                                 if((k > nrl + 1 && k < nrh - 1) && (l > ncl + 1 && l < nch - 1)){
                                     if(In2[k][l] == BLANC){
                                         // Processing the vector from the difference of both images on the interest points coordinates
@@ -261,7 +269,8 @@ void vectorDisplacementEstimation(byte** In1, byte** In2, int** accumulationMat,
                                             vy = vy + shift;
 
                                             // We increment on each components of our vector the accumulation matrix
-                                            accumulationMat[vx][vy] = accumulationMat[vx][vy] + 1;
+                                            if(vx != 49 && vy != 49 && vx != 48 && vy != 48)
+                                                accumulationMat[vx][vy] = accumulationMat[vx][vy] + 1;
 
                                             // Setting the boolean to true when we found ONE interest point on the second Image
                                             found = 1;
